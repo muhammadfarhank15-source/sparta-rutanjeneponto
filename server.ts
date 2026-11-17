@@ -1550,11 +1550,17 @@ app.post('/api/transactions', requireAdminAuth, (req, res) => {
       : targetWbp.saldoBerjalan - trxData.nominal;
 
   const newTrxId = trxData.id || `trx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-  const nowStr = trxData.waktuPencatatan || new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const effectiveTanggal =
+    trxData.tanggal && /^\d{4}-\d{2}-\d{2}$/.test(String(trxData.tanggal).trim())
+      ? String(trxData.tanggal).trim()
+      : new Date().toISOString().substring(0, 10);
+  const nowStr =
+    trxData.waktuPencatatan || `${effectiveTanggal} ${new Date().toISOString().substring(11, 19)}`;
 
   const newTrx: Transaksi = {
     ...trxData,
     id: newTrxId,
+    tanggal: effectiveTanggal,
     noIdBrizzi: trxData.noIdBrizzi || targetWbp.noIdBrizzi || '',
     waktuPencatatan: nowStr,
     saldoSetelahTransaksi: newSaldo,

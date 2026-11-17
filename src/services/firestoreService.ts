@@ -27,7 +27,7 @@ import {
   BulkImportResult,
   ResetOptions,
 } from '../types';
-import { getWitaDateTimeString, getWitaDateString, getTrustedServerTime } from '../utils/formatters';
+import { getWitaDateTimeString, getWitaDateString, getWitaTimeString, getTrustedServerTime } from '../utils/formatters';
 
 // Collection references
 const COL_WBP = 'warga_binaan';
@@ -664,14 +664,19 @@ class FirestoreService {
         ? targetWbp.saldoBerjalan + trxData.nominal
         : targetWbp.saldoBerjalan - trxData.nominal;
 
-    const nowStr = getWitaDateTimeString();
+    const effectiveTanggal =
+      trxData.tanggal && /^\d{4}-\d{2}-\d{2}$/.test(trxData.tanggal.trim())
+        ? trxData.tanggal.trim()
+        : getWitaDateString();
+    const nowTimeStr = getWitaTimeString();
+    const effectiveWaktuPencatatan = `${effectiveTanggal} ${nowTimeStr}`;
 
     const newTrx: Transaksi = {
       ...trxData,
       id: trxId,
-      tanggal: trxData.tanggal || getWitaDateString(),
+      tanggal: effectiveTanggal,
       noIdBrizzi: trxData.noIdBrizzi || targetWbp.noIdBrizzi || '',
-      waktuPencatatan: nowStr,
+      waktuPencatatan: effectiveWaktuPencatatan,
       saldoSetelahTransaksi: newSaldo,
     };
 

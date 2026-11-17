@@ -23,6 +23,8 @@ import {
   formatDateTimeIndo,
   exportToCsvWithBOM,
   exportToXlsx,
+  parseDateSafe,
+  resolveTransactionDateTime,
 } from '../../utils/formatters';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { ReceiptModal } from '../common/ReceiptModal';
@@ -109,8 +111,8 @@ export const RiwayatTransaksi: React.FC = () => {
       return matchSearch && matchJenis && matchCategory && matchDate;
     })
     .sort((a, b) => {
-      const timeA = new Date(a.waktuPencatatan).getTime();
-      const timeB = new Date(b.waktuPencatatan).getTime();
+      const timeA = parseDateSafe(resolveTransactionDateTime(a))?.getTime() ?? 0;
+      const timeB = parseDateSafe(resolveTransactionDateTime(b))?.getTime() ?? 0;
       return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
     });
 
@@ -159,7 +161,7 @@ export const RiwayatTransaksi: React.FC = () => {
       return [
         idx + 1,
         t.tanggal,
-        t.waktuPencatatan,
+        resolveTransactionDateTime(t),
         t.nomorTransaksi,
         t.namaWbp,
         t.noIdBrizzi || wbp?.noIdBrizzi || 'Belum diisi',
@@ -203,7 +205,7 @@ export const RiwayatTransaksi: React.FC = () => {
       return [
         idx + 1,
         t.tanggal,
-        t.waktuPencatatan,
+        resolveTransactionDateTime(t),
         t.nomorTransaksi,
         t.namaWbp,
         t.noIdBrizzi || wbp?.noIdBrizzi || 'Belum diisi',
@@ -425,7 +427,7 @@ export const RiwayatTransaksi: React.FC = () => {
                     <tr key={trx.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-3.5 py-3 font-medium text-slate-500">{idx + 1}</td>
                       <td className="px-3.5 py-3 whitespace-nowrap text-slate-800">
-                        {formatDateTimeIndo(trx.waktuPencatatan)}
+                        {formatDateTimeIndo(resolveTransactionDateTime(trx))}
                       </td>
                       <td className="px-3.5 py-3 font-mono font-bold text-slate-700 whitespace-nowrap">
                         {trx.nomorTransaksi}

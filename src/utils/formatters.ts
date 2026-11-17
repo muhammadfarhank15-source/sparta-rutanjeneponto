@@ -153,11 +153,87 @@ export function formatDateTimeIndo(dateTimeStr: string | Date | number | undefin
   }
 }
 
-export function generateTransactionNumber(jenis: 'Uang Masuk' | 'Uang Keluar'): string {
+export function generateTransactionNumber(jenis: 'Uang Masuk' | 'Uang Keluar', customDate?: string): string {
   const prefix = jenis === 'Uang Masuk' ? 'TR-MSK' : 'TR-KLR';
-  const dateCode = getWitaDateString().replace(/-/g, '');
+  const validCustom = customDate && /^\d{4}-\d{2}-\d{2}$/.test(customDate.trim()) ? customDate.trim() : null;
+  const dateCode = (validCustom || getWitaDateString()).replace(/-/g, '');
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
   return `${prefix}-${dateCode}-${randomSuffix}`;
+}
+
+/**
+ * Mengonversi tanggal ISO "YYYY-MM-DD" menjadi format input manual "DD/MM/YYYY"
+ */
+export function formatIsoDateToManual(isoDate: string): string {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate.trim())) return '';
+  const [y, m, d] = isoDate.trim().split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * Mem-parsing input tanggal manual (DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, YYYY/MM/DD)
+ * menjadi format standar "YYYY-MM-DD", atau null jika tidak valid.
+ */
+export function parseManualDateToIso(input: string): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  const isoMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  const dmyMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+
+  if (isoMatch) {
+    year = Number(isoMatch[1]);
+    month = Number(isoMatch[2]);
+    day = Number(isoMatch[3]);
+  } else if (dmyMatch) {
+    day = Number(dmyMatch[1]);
+    month = Number(dmyMatch[2]);
+    year = Number(dmyMatch[3]);
+  } else {
+    return null;
+  }
+
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const checkDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    checkDate.getUTCFullYear() !== year ||
+    checkDate.getUTCMonth() !== month - 1 ||
+    checkDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  const mm = String(month).padStart(2, '0');
+  const dd = String(day).padStart(2, '0');
+  return `${year}-${mm}-${dd}`;
+}
+
+/**
+ * Memastikan waktuPencatatan transaksi konsisten dengan field `tanggal` (YYYY-MM-DD)
+ */
+export function resolveTransactionDateTime(trx: { tanggal?: string; waktuPencatatan?: string }): string {
+  const datePart = trx.tanggal && /^\d{4}-\d{2}-\d{2}$/.test(trx.tanggal.trim()) ? trx.tanggal.trim() : '';
+  const waktu = (trx.waktuPencatatan || '').trim();
+  if (datePart) {
+    if (waktu.startsWith(datePart)) {
+      return waktu;
+    }
+    const timeMatch = waktu.match(/(\d{2}:\d{2}(?::\d{2})?)/);
+    const timePart = timeMatch
+      ? timeMatch[1].length === 5
+        ? `${timeMatch[1]}:00`
+        : timeMatch[1]
+      : '00:00:00';
+    return `${datePart} ${timePart}`;
+  }
+  return waktu;
 }
 
 import * as XLSX from 'xlsx';

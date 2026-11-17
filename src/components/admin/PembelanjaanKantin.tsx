@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   TrendingDown,
   Search,
@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   Save,
   Lock,
+  Calendar,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Transaksi } from '../../types';
@@ -21,6 +22,9 @@ import {
   exportToCsvWithBOM,
   exportToXlsx,
   getWitaDateString,
+  formatIsoDateToManual,
+  parseManualDateToIso,
+  resolveTransactionDateTime,
 } from '../../utils/formatters';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { ReceiptModal } from '../common/ReceiptModal';
@@ -46,7 +50,10 @@ export const PembelanjaanKantin: React.FC = () => {
 
   // Form State: Nominal Belanja (Minimal Rp 500, Maksimal Rp 1.000.000)
   const [wbpId, setWbpId] = useState(sortedWbpList.length > 0 ? sortedWbpList[0].id : '');
-  const [tanggal, setTanggal] = useState(getWitaDateString());
+  const initialDateIso = getWitaDateString();
+  const [tanggal, setTanggal] = useState(initialDateIso);
+  const [tanggalInput, setTanggalInput] = useState(() => formatIsoDateToManual(initialDateIso));
+  const datePickerRef = useRef<HTMLInputElement>(null);
   const [kategori, setKategori] = useState('Belanja Makanan & Kantin');
   const [nominal, setNominal] = useState<number | ''>(500);
   const [tujuan, setTujuan] = useState('Kantin Koperasi Rutan');
@@ -108,14 +115,23 @@ export const PembelanjaanKantin: React.FC = () => {
       return;
     }
 
+    const resolvedTanggal = parseManualDateToIso(tanggalInput);
+    if (!resolvedTanggal) {
+      setStatusMsg({
+        type: 'error',
+        text: 'Format tanggal transaksi tidak valid! Ketik manual dengan format DD/MM/YYYY (contoh: 16/11/2026) atau YYYY-MM-DD.',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     setStatusMsg(null);
 
-    const nomorTransaksi = generateTransactionNumber('Uang Keluar');
+    const nomorTransaksi = generateTransactionNumber('Uang Keluar', resolvedTanggal);
     try {
       const result = await addTransaction({
         nomorTransaksi,
-        tanggal,
+        tanggal: resolvedTanggal,
         wbpId: selectedWbp.id,
         namaWbp: selectedWbp.nama,
         noIdBrizzi: selectedWbp.noIdBrizzi || '',
@@ -169,7 +185,7 @@ export const PembelanjaanKantin: React.FC = () => {
       const wbp = wbpList.find((w) => w.id === t.wbpId);
       return [
         idx + 1,
-        formatDateTimeIndo(t.waktuPencatatan),
+        formatDateTimeIndo(resolveTransactionDateTime(t)),
         t.nomorTransaksi,
         t.namaWbp,
         t.noIdBrizzi || wbp?.noIdBrizzi || 'Belum diisi',
@@ -209,7 +225,7 @@ export const PembelanjaanKantin: React.FC = () => {
       const wbp = wbpList.find((w) => w.id === t.wbpId);
       return [
         idx + 1,
-        formatDateTimeIndo(t.waktuPencatatan),
+        formatDateTimeIndo(resolveTransactionDateTime(t)),
         t.nomorTransaksi,
         t.namaWbp,
         t.noIdBrizzi || wbp?.noIdBrizzi || 'Belum diisi',
@@ -316,13 +332,72 @@ export const PembelanjaanKantin: React.FC = () => {
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Tanggal Transaksi:
               </label>
-              <input
-                type="date"
-                value={tanggal}
-                onChange={(e) => setTanggal(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-medium"
-                required
-              />
+              <div className="relative flex items-center">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={tanggalInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTanggalInput(val);
+                    const parsed = parseManualDateToIso(val);
+                    if (parsed) {
+                      setTanggal(parsed);
+                    }
+                  }}
+                  onBlur={() => {
+                    const parsed = parseManualDateToIso(tanggalInput);
+                    if (parsed) {
+                      setTanggal(parsed);
+                      setTanggalInput(formatIsoDateToManual(parsed));
+                    }
+                  }}
+                  placeholder="DD/MM/YYYY atau YYYY-MM-DD"
+                  className="w-full pl-3 pr-9 py-2 border border-slate-300 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
+                  required
+                />
+                <div className="absolute right-2 flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const picker = datePickerRef.current;
+                      if (!picker) return;
+                      if (typeof (picker as any).showPicker === 'function') {
+                        try {
+                          (picker as any).showPicker();
+                          return;
+                        } catch {
+                          // fallback
+                        }
+                      }
+                      picker.focus();
+                      picker.click();
+                    }}
+                    className="p-1 text-slate-500 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+                    title="Pilih tanggal dari kalender"
+                  >
+                    <Calendar className="w-4 h-4" />
+                  </button>
+                  <input
+                    ref={datePickerRef}
+                    type="date"
+                    value={tanggal}
+                    onChange={(e) => {
+                      const iso = e.target.value;
+                      if (iso) {
+                        setTanggal(iso);
+                        setTanggalInput(formatIsoDateToManual(iso));
+                      }
+                    }}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className="sr-only"
+                  />
+                </div>
+              </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Ketik manual (cth: 16/11/2026) atau klik ikon kalender
+              </span>
             </div>
 
             {/* Nama WBP */}
@@ -627,7 +702,7 @@ export const PembelanjaanKantin: React.FC = () => {
                       <tr key={trx.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-4 py-3 font-medium text-slate-500">{idx + 1}</td>
                         <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">
-                          {formatDateTimeIndo(trx.waktuPencatatan)}
+                          {formatDateTimeIndo(resolveTransactionDateTime(trx))}
                         </td>
                         <td className="px-4 py-3 font-mono font-bold text-slate-700 whitespace-nowrap">
                           {trx.nomorTransaksi}
